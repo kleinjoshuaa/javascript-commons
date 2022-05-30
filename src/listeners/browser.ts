@@ -14,10 +14,12 @@ import { ISyncManager } from '../sync/types';
 import { isConsentGranted } from '../consent';
 import { telemetryCacheStatsAdapter } from '../sync/submitters/telemetrySubmitter';
 
-// 'unload' event is used instead of 'beforeunload', since 'unload' is not a cancelable event, so no other listeners can stop the event from occurring.
-const UNLOAD_DOM_EVENT = 'unload';
-const EVENT_NAME = 'for unload page event.';
+// flushing upon pageVisbility === hidden is the preferred approach as per the MDN
 
+
+const EVENT_NAME = 'for visibilityChange page event.';
+const DOM_EVENT = 'visibilitychange';
+const FLUSH_VALUE = 'hidden';
 /**
  * We'll listen for 'unload' event over the window object, since it's the standard way to listen page reload and close.
  */
@@ -43,7 +45,7 @@ export class BrowserSignalListener implements ISignalListener {
   start() {
     if (typeof window !== 'undefined' && window.addEventListener) {
       this.settings.log.debug(CLEANUP_REGISTERING, [EVENT_NAME]);
-      window.addEventListener(UNLOAD_DOM_EVENT, this.flushData);
+      window.addEventListener(DOM_EVENT, this.flushData.bind(this, document.visibilityState));
     }
   }
 
@@ -55,18 +57,18 @@ export class BrowserSignalListener implements ISignalListener {
   stop() {
     if (typeof window !== 'undefined' && window.removeEventListener) {
       this.settings.log.debug(CLEANUP_DEREGISTERING, [EVENT_NAME]);
-      window.removeEventListener(UNLOAD_DOM_EVENT, this.flushData);
+      window.addEventListener(DOM_EVENT, this.flushData.bind(this, document.visibilityState));
     }
   }
 
   /**
    * flushData method.
-   * Called when unload event is triggered. It flushed remaining impressions and events to the backend,
+   * Called when visibilitychange event is triggered. It flushed remaining impressions and events to the backend,
    * using beacon API if possible, or falling back to regular post transport.
    */
-  flushData() {
+  flushData(visibilityState: String) {
     if (!this.syncManager) return; // In consumer mode there is not sync manager and data to flush
-
+    if (visibilityState !== FLUSH_VALUE) return; // returning because we only care about changes to hidden
     // Flush data if there is user consent
     if (isConsentGranted(this.settings)) {
       const eventsUrl = this.settings.urls.events;

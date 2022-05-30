@@ -77,18 +77,18 @@ const fakeSplitApi = {
   postMetricsUsage: jest.fn(() => Promise.resolve()),
 } as ISplitApi;
 
-const UNLOAD_DOM_EVENT = 'unload';
-const unloadEventListeners = new Set<() => any>();
+const VISIBILITY_DOM_EVENT = 'visibilitychange';
+const visibilityEventListeners = new Set<() => any>();
 
-// mock window and navigator objects
+// mock window, document and navigator objects
 beforeAll(() => {
   Object.defineProperty(global, 'window', {
     value: {
       addEventListener: jest.fn((event, cb) => {
-        if (event === UNLOAD_DOM_EVENT) unloadEventListeners.add(cb);
+        if (event === VISIBILITY_DOM_EVENT) visibilityEventListeners.add(cb);
       }),
       removeEventListener: jest.fn((event, cb) => {
-        if (event === UNLOAD_DOM_EVENT) unloadEventListeners.delete(cb);
+        if (event === VISIBILITY_DOM_EVENT) visibilityEventListeners.delete(cb);
       }),
       navigator: {
         sendBeacon: jest.fn(() => true)
@@ -97,6 +97,9 @@ beforeAll(() => {
   });
   Object.defineProperty(global, 'navigator', {
     value: global.window.navigator
+  });
+  Object.defineProperty(global, 'document', {
+    value: {visibilityState: 'hidden'}
   });
 });
 
@@ -113,10 +116,11 @@ afterAll(() => {
   // @ts-expect-error
   delete global.window; // @ts-expect-error
   delete global.navigator;
+  //delete global.document;  
 });
 
-function triggerUnloadEvent() {
-  unloadEventListeners.forEach(cb => cb());
+function triggerVisibilityEvent() {
+  visibilityEventListeners.forEach(cb => cb());
 }
 
 /* Mocks end */
@@ -128,9 +132,9 @@ test('Browser JS listener / consumer mode', () => {
   listener.start();
 
   // Assigned right function to right signal.
-  expect((global.window.addEventListener as jest.Mock).mock.calls).toEqual([[UNLOAD_DOM_EVENT, listener.flushData]]);
+  expect((global.window.addEventListener as jest.Mock).mock.calls).toEqual([[VISIBILITY_DOM_EVENT, listener.flushData]]); //TODO flush method needs argument?
 
-  triggerUnloadEvent();
+  triggerVisibilityEvent();
 
   // Unload event was triggered, but sendBeacon and post services should not be called
   expect(global.window.navigator.sendBeacon).toBeCalledTimes(0);
@@ -143,7 +147,7 @@ test('Browser JS listener / consumer mode', () => {
   listener.stop();
 
   // removed correct listener from correct signal on stop.
-  expect((global.window.removeEventListener as jest.Mock).mock.calls).toEqual([[UNLOAD_DOM_EVENT, listener.flushData]]);
+  expect((global.window.addEventListener as jest.Mock).mock.calls).toEqual([[VISIBILITY_DOM_EVENT, listener.flushData]]);
 });
 
 test('Browser JS listener / standalone mode / Impressions optimized mode with telemetry', () => {
@@ -155,11 +159,11 @@ test('Browser JS listener / standalone mode / Impressions optimized mode with te
   listener.start();
 
   // Assigned right function to right signal.
-  expect((global.window.addEventListener as jest.Mock).mock.calls).toEqual([[UNLOAD_DOM_EVENT, listener.flushData]]);
+  expect((global.window.addEventListener as jest.Mock).mock.calls).toEqual([[VISIBILITY_DOM_EVENT, listener.flushData]]);
 
-  triggerUnloadEvent();
+  triggerVisibilityEvent();
 
-  // Unload event was triggered. Thus sendBeacon method should have been called four times.
+  // visibilitychange event was triggered. Thus sendBeacon method should have been called four times.
   expect(global.window.navigator.sendBeacon).toBeCalledTimes(4);
 
   // Http post services should have not been called
@@ -172,7 +176,7 @@ test('Browser JS listener / standalone mode / Impressions optimized mode with te
   listener.stop();
 
   // removed correct listener from correct signal on stop.
-  expect((global.window.removeEventListener as jest.Mock).mock.calls).toEqual([[UNLOAD_DOM_EVENT, listener.flushData]]);
+  expect((global.window.addEventListener as jest.Mock).mock.calls).toEqual([[VISIBILITY_DOM_EVENT, listener.flushData]]);
 });
 
 test('Browser JS listener / standalone mode / Impressions debug mode', () => {
@@ -184,13 +188,13 @@ test('Browser JS listener / standalone mode / Impressions debug mode', () => {
   listener.start();
 
   // Assigned right function to right signal.
-  expect((global.window.addEventListener as jest.Mock).mock.calls).toEqual([[UNLOAD_DOM_EVENT, listener.flushData]]);
+  expect((global.window.addEventListener as jest.Mock).mock.calls).toEqual([[VISIBILITY_DOM_EVENT, listener.flushData]]);
 
   expect(syncManagerMockWithPushManager.pushManager.stop).not.toBeCalled();
 
-  triggerUnloadEvent();
+  triggerVisibilityEvent();
 
-  // Unload event was triggered. Thus sendBeacon method should have been called twice.
+  // visibilitychange event was triggered. Thus sendBeacon method should have been called twice.
   expect(global.window.navigator.sendBeacon).toBeCalledTimes(2);
 
   // And since we passed a syncManager with a pushManager, its stop method should have been called.
@@ -206,7 +210,7 @@ test('Browser JS listener / standalone mode / Impressions debug mode', () => {
   listener.stop();
 
   // removed correct listener from correct signal on stop.
-  expect((global.window.removeEventListener as jest.Mock).mock.calls).toEqual([[UNLOAD_DOM_EVENT, listener.flushData]]);
+  expect((global.window.removeEventListener as jest.Mock).mock.calls).toEqual([[VISIBILITY_DOM_EVENT, listener.flushData]]);
 });
 
 test('Browser JS listener / standalone mode / Impressions debug mode without sendBeacon API', () => {
@@ -221,11 +225,11 @@ test('Browser JS listener / standalone mode / Impressions debug mode without sen
   listener.start();
 
   // Assigned right function to right signal.
-  expect((global.window.addEventListener as jest.Mock).mock.calls).toEqual([[UNLOAD_DOM_EVENT, listener.flushData]]);
+  expect((global.window.addEventListener as jest.Mock).mock.calls).toEqual([[VISIBILITY_DOM_EVENT, listener.flushData]]);
 
-  triggerUnloadEvent();
+  triggerVisibilityEvent();
 
-  // Unload event was triggered. Thus sendBeacon method should have been called twice.
+  // visibilitychange event was triggered. Thus sendBeacon method should have been called twice.
   expect(sendBeacon).not.toBeCalled();
 
   // Http post services should have not been called
@@ -238,7 +242,7 @@ test('Browser JS listener / standalone mode / Impressions debug mode without sen
   listener.stop();
 
   // removed correct listener from correct signal on stop.
-  expect((global.window.removeEventListener as jest.Mock).mock.calls).toEqual([[UNLOAD_DOM_EVENT, listener.flushData]]);
+  expect((global.window.removeEventListener as jest.Mock).mock.calls).toEqual([[VISIBILITY_DOM_EVENT, listener.flushData]]);
 
   // restore sendBeacon API
   global.navigator.sendBeacon = sendBeacon;
@@ -254,22 +258,22 @@ test('Browser JS listener / standalone mode / user consent status', () => {
   listener.start();
 
   settings.userConsent = 'UNKNOWN';
-  triggerUnloadEvent();
+  triggerVisibilityEvent();
   settings.userConsent = 'DECLINED';
-  triggerUnloadEvent();
+  triggerVisibilityEvent();
 
-  // Unload event was triggered when user consent was unknown and declined. Thus sendBeacon and post services should not be called
+  // visibilitychange event was triggered when user consent was unknown and declined. Thus sendBeacon and post services should not be called
   expect(global.window.navigator.sendBeacon).toBeCalledTimes(0);
   expect(fakeSplitApi.postTestImpressionsBulk).not.toBeCalled();
   expect(fakeSplitApi.postEventsBulk).not.toBeCalled();
   expect(fakeSplitApi.postTestImpressionsCount).not.toBeCalled();
 
   settings.userConsent = 'GRANTED';
-  triggerUnloadEvent();
+  triggerVisibilityEvent();
   settings.userConsent = undefined;
-  triggerUnloadEvent();
+  triggerVisibilityEvent();
 
-  // Unload event was triggered when user consent was granted and undefined. Thus sendBeacon should be called 8 times (4 times per event in optimized mode with telemetry).
+  // visibilitychange event was triggered when user consent was granted and undefined. Thus sendBeacon should be called 8 times (4 times per event in optimized mode with telemetry).
   expect(global.window.navigator.sendBeacon).toBeCalledTimes(8);
 
   listener.stop();
